@@ -37,34 +37,49 @@ struct State {
 
 impl State {
     pub fn new(master: &str) -> Self {
-        let master = sha::hash(master.as_bytes());
-
-        // open database
         let connection = sqlite::Connection::open("db").unwrap();
         connection
             .execute("CREATE TABLE IF NOT EXISTS passwords (name STRING PRIMARY KEY, account STRING, cyphertext BLOB)")
             .unwrap();
         connection
-            .execute("CREATE TABLE IF NOT EXISTS master (hash BLOB)")
+            .execute("CREATE TABLE IF NOT EXISTS master (hash BLOB, salt BLOB)")
             .unwrap();
 
-        // compare the given master password to the password in the database
-        let statement = connection.prepare("SELECT hash FROM master").unwrap();
-        if let sqlite::Step::Row(row) = statement.step().unwrap() {
-            if master != row.column_blob(0).unwrap() {
+        let master = if let sqlite::Step::Row(row) = connection
+            .prepare("SELECT hash, salt FROM master")
+            .unwrap()
+            .step()
+            .unwrap()
+        {
+            let hash = row.column_blob(0).unwrap();
+            let salt = row.column_blob(1).unwrap();
+
+            let mut master = master.as_bytes().to_vec();
+            master.extend_from_slice(salt);
+
+            if sha::hash(&master) != row.column_blob(0).unwrap() {
                 todo!("wrong master password");
             }
+
+            hash.try_into().unwrap()
         } else {
+            let salt = rand::random::<[u8; 4]>();
+
+            let mut master = master.as_bytes().to_vec();
+            master.extend_from_slice(&salt);
+
+            let hash = sha::hash(&master);
+
             let statement = connection
-                .prepare("INSERT INTO master (hash) VALUES (?)")
+                .prepare("INSERT INTO master (hash, salt) VALUES (?, ?)")
                 .unwrap();
-            statement.bind_blob(1, &master).unwrap();
+            statement.bind_blob(1, &hash).unwrap();
+            statement.bind_blob(2, &salt).unwrap();
             statement.execute().unwrap();
-        }
 
-        drop(statement);
+            hash
+        };
 
-        // create list of passwords from database
         let mut passwords = Vec::new();
         let statement = connection
             .prepare("SELECT name, account, cyphertext FROM passwords")
@@ -191,7 +206,6 @@ impl App {
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // if logged in render state, otherwise display login ui
         egui::CentralPanel::default().show(ctx, |ui| match self {
             Self::LoggedIn(state) => state.ui(ui),
             Self::LoggedOut(master) => {

@@ -1,6 +1,6 @@
 use crate::Password;
 
-// Insertion Sort
+/// Insertion Sort
 pub fn sort(list: &mut Vec<Password>) {
     let len = list.len();
     for i in 0..len {
@@ -13,7 +13,7 @@ pub fn sort(list: &mut Vec<Password>) {
     }
 }
 
-// Compare two strings alphabetically
+/// Compare two strings alphabetically
 fn alphabetical(lhs: &str, rhs: &str) -> bool {
     let mut lhs = lhs.chars();
     let mut rhs = rhs.chars();
@@ -35,7 +35,7 @@ fn alphabetical(lhs: &str, rhs: &str) -> bool {
     }
 }
 
-// Binary Search
+/// Binary Search
 pub fn contains(name: &str, list: &[Password]) -> bool {
     let mut lhs = 0;
     let mut rhs = list.len();
