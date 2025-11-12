@@ -4,9 +4,6 @@ use eframe::egui;
 impl State {
     pub fn ui(&mut self, ui: &mut egui::Ui) {
         ui.vertical_centered(|ui| {
-            ui.heading("GoonPass");
-            ui.separator();
-
             self.new_password(ui);
 
             if !self.passwords.is_empty() {
@@ -108,7 +105,6 @@ pub fn login(master: &mut String, ui: &mut egui::Ui) -> Option<String> {
     ui.vertical_centered(|ui| {
         ui.set_width(ui.available_width() - 8.0);
 
-        ui.heading("GoonPass");
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
             if ui.button("Log In").clicked() && !master.is_empty() {
                 login = Some(master.clone());

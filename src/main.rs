@@ -8,7 +8,7 @@ use eframe::egui;
 
 fn main() {
     eframe::run_native(
-        "GoonPass",
+        "Password Manager",
         eframe::NativeOptions::default(),
         Box::new(|cc| Ok(Box::new(App::new(cc)))),
     )
