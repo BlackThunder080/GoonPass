@@ -1,3 +1,5 @@
+#![windows_subsystem = "windows"]
+
 mod aes;
 mod algo;
 mod sha;
@@ -7,6 +9,20 @@ mod ui;
 use eframe::egui;
 
 fn main() {
+    let default_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        default_hook(info);
+
+        if let Some(payload) = info.payload_as_str() {
+            _ = native_dialog::DialogBuilder::message()
+                .set_title("Error")
+                .set_level(native_dialog::MessageLevel::Error)
+                .set_text(payload)
+                .alert()
+                .show();
+        }
+    }));
+
     eframe::run_native(
         "Password Manager",
         eframe::NativeOptions::default(),
@@ -37,31 +53,31 @@ struct State {
 
 impl State {
     pub fn new(master: &str) -> Self {
-        let connection = sqlite::Connection::open("db").unwrap();
+        let connection = sqlite::Connection::open("db").expect("failed to open database");
         connection
             .execute("CREATE TABLE IF NOT EXISTS passwords (name STRING PRIMARY KEY, account STRING, cyphertext BLOB)")
-            .unwrap();
+            .expect("corrupt database");
         connection
             .execute("CREATE TABLE IF NOT EXISTS master (hash BLOB, salt BLOB)")
-            .unwrap();
+            .expect("corrupt database");
 
         let master = if let sqlite::Step::Row(row) = connection
             .prepare("SELECT hash, salt FROM master")
-            .unwrap()
+            .expect("corrupt database")
             .step()
-            .unwrap()
+            .expect("corrupt database")
         {
-            let hash = row.column_blob(0).unwrap();
-            let salt = row.column_blob(1).unwrap();
+            let hash = row.column_blob(0).expect("corrupt database");
+            let salt = row.column_blob(1).expect("corrupt database");
 
             let mut master = master.as_bytes().to_vec();
             master.extend_from_slice(salt);
 
-            if sha::hash(&master) != row.column_blob(0).unwrap() {
+            if sha::hash(&master) != row.column_blob(0).expect("corrupt database") {
                 todo!("wrong master password");
             }
 
-            hash.try_into().unwrap()
+            hash.try_into().expect("corrupt database")
         } else {
             let salt = rand::random::<[u8; 4]>();
 
@@ -72,10 +88,10 @@ impl State {
 
             let statement = connection
                 .prepare("INSERT INTO master (hash, salt) VALUES (?, ?)")
-                .unwrap();
-            statement.bind_blob(1, &hash).unwrap();
-            statement.bind_blob(2, &salt).unwrap();
-            statement.execute().unwrap();
+                .expect("corrupt database");
+            statement.bind_blob(1, &hash).expect("corrupt database");
+            statement.bind_blob(2, &salt).expect("corrupt database");
+            statement.execute().expect("corrupt database");
 
             hash
         };
@@ -83,11 +99,11 @@ impl State {
         let mut passwords = Vec::new();
         let statement = connection
             .prepare("SELECT name, account, cyphertext FROM passwords")
-            .unwrap();
+            .expect("corrupt database");
         for row in &statement.rows() {
-            let name = row.column_text(0).unwrap().to_string();
-            let account = row.column_text(1).unwrap().to_string();
-            let cyphertext = row.column_blob(2).unwrap().to_vec();
+            let name = row.column_text(0).expect("corrupt database").to_string();
+            let account = row.column_text(1).expect("corrupt database").to_string();
+            let cyphertext = row.column_blob(2).expect("corrupt database").to_vec();
 
             passwords.push(Password {
                 name,
@@ -137,11 +153,13 @@ impl State {
         let statement = self
             .connection
             .prepare("INSERT INTO passwords (name, account, cyphertext) VALUES (?, ?, ?)")
-            .unwrap();
-        statement.bind_text(1, &name).unwrap();
-        statement.bind_text(2, &account).unwrap();
-        statement.bind_blob(3, &cyphertext).unwrap();
-        statement.execute().unwrap();
+            .expect("corrupt database");
+        statement.bind_text(1, &name).expect("corrupt database");
+        statement.bind_text(2, &account).expect("corrupt database");
+        statement
+            .bind_blob(3, &cyphertext)
+            .expect("corrupt database");
+        statement.execute().expect("corrupt database");
 
         self.passwords.push(Password {
             name,
@@ -162,9 +180,9 @@ impl State {
         let statement = self
             .connection
             .prepare("DELETE FROM passwords WHERE name = ?")
-            .unwrap();
-        statement.bind_text(1, &name).unwrap();
-        statement.execute().unwrap();
+            .expect("database");
+        statement.bind_text(1, &name).expect("database");
+        statement.execute().expect("database");
     }
 
     fn copy_password(&self, password: &Password, ctx: &egui::Context) {
