@@ -52,7 +52,7 @@ struct State {
 }
 
 impl State {
-    pub fn new(master: &str) -> Self {
+    pub fn new(master: &str) -> Result<Self, ()> {
         let connection = sqlite::Connection::open("db").expect("failed to open database");
         connection
             .execute("CREATE TABLE IF NOT EXISTS passwords (name STRING PRIMARY KEY, account STRING, cyphertext BLOB)")
@@ -74,7 +74,7 @@ impl State {
             master.extend_from_slice(salt);
 
             if sha::hash(&master) != row.column_blob(0).expect("corrupt database") {
-                todo!("wrong master password");
+                return Err(());
             }
 
             hash.try_into().expect("corrupt database")
@@ -114,14 +114,14 @@ impl State {
 
         algo::sort(&mut passwords);
 
-        Self {
+        Ok(Self {
             passwords,
             master,
             connection,
             name_field: String::new(),
             account_field: String::new(),
             plaintext_field: String::new(),
-        }
+        })
     }
 
     fn add_password(&mut self) {
@@ -218,7 +218,11 @@ impl App {
     }
 
     fn login(&mut self, master: &str) {
-        *self = App::LoggedIn(State::new(master));
+        let Ok(state) = State::new(master) else {
+            return;
+        };
+
+        *self = App::LoggedIn(state);
     }
 }
 
